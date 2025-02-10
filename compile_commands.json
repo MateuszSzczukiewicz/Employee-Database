@@ -1,0 +1,17 @@
+[
+  {
+    "directory": "/home/alto64/workspace/Employee-Database/src",
+    "command": "gcc -I../include -o main.o -c main.c",
+    "file": "main.c"
+  },
+  {
+    "directory": "/home/alto64/workspace/Employee-Database/src",
+    "command": "gcc -I../include -o file.o -c file.c",
+    "file": "file.c"
+  },
+  {
+    "directory": "/home/alto64/workspace/Employee-Database/src",
+    "command": "gcc -I../include -o parse.o -c parse.c",
+    "file": "parse.c"
+  }
+]
