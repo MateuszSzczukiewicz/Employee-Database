@@ -13,10 +13,52 @@
 void list_employees(struct dbheader_t *dbhdr, struct employee_t *employees) {}
 
 int add_employee(struct dbheader_t *dbhdr, struct employee_t *employees,
-                 char *addstring) {}
+                 char *addstring) {
+  printf("%s\n", addstring);
+
+  char *name = strtok(addstring, ",");
+
+  char *addr = strtok(NULL, ",");
+
+  char *hours = strtok(NULL, ",");
+
+  printf("%s %s %s\n", name, addr, hours);
+
+  strncmp(employees[dbhdr->count - 1].name, name,
+          sizeof(employees[dbhdr->count - 1].name));
+  strncmp(employees[dbhdr->count - 1].address, name,
+          sizeof(employees[dbhdr->count - 1].address));
+
+  employees[dbhdr->count - 1].hours = atoi(hours);
+
+  return STATUS_SUCCESS;
+}
 
 int read_employees(int fd, struct dbheader_t *dbhdr,
-                   struct employee_t **employeesOut) {}
+                   struct employee_t **employeesOut) {
+  if (fd < 0) {
+    printf("Got a bad FD from the user\n");
+    return STATUS_ERROR;
+  }
+
+  int count = dbhdr->count;
+
+  struct employee_t *employees = calloc(count, sizeof(struct employee_t));
+  if (employees == NULL) {
+    printf("Malloc failed\n");
+    return STATUS_ERROR;
+  }
+
+  read(fd, employees, count * sizeof(struct employee_t));
+
+  int i = 0;
+  for (; i < count; i++) {
+    employees[i].hours = ntohs(employees[i].hours);
+  }
+
+  *employeesOut = employees;
+  return STATUS_SUCCESS;
+}
 
 int output_file(int fd, struct dbheader_t *dbhdr,
                 struct employee_t *employees) {
@@ -70,13 +112,13 @@ int validate_db_header(int fd, struct dbheader_t **headerOut) {
   header->filesize = ntohs(header->filesize);
 
   if (header->magic != HEADER_MAGIC) {
-    printf("Inpromper header version\n");
+    printf("Impromper header version\n");
     free(header);
     return -1;
   }
 
   if (header->version != 1) {
-    printf("Inpromper header version\n");
+    printf("Impromper header version\n");
     free(header);
     return -1;
   }
@@ -84,7 +126,7 @@ int validate_db_header(int fd, struct dbheader_t **headerOut) {
   struct stat dbstat = {0};
   fstat(fd, &dbstat);
   if (header->filesize != dbstat.st_size) {
-    printf("corrupted database\n");
+    printf("Corrupted database\n");
     free(header);
     return -1;
   }
