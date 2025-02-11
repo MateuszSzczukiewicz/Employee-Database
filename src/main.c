@@ -28,7 +28,7 @@ int main(int argc, char *argv[]) {
   struct dbhdr_t *dbhdr = NULL;
   struct employee_t *employees = NULL;
 
-  while ((c = getopt(argc, argv, "nf:a:")) != -1) {
+  while ((c = getopt(argc, argv, "nf:a:l")) != -1) {
     switch (c) {
     case 'n':
       newfile = true;
@@ -94,6 +94,10 @@ int main(int argc, char *argv[]) {
     realloc(employees, dbhdr->count);
 
     add_employee(dbhdr, employees, addstring);
+  }
+
+  if (list) {
+    list_employees(dbhdr, employees);
   }
 
   output_file(dbfd, dbhdr, employees);
