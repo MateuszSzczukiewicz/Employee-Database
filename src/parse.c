@@ -52,7 +52,7 @@ int read_employees(int fd, struct dbheader_t *dbhdr,
   int count = dbhdr->count;
 
   struct employee_t *employees = calloc(count, sizeof(struct employee_t));
-  if (employees == NULL) {
+  if (employees == (void *)-1) {
     printf("Malloc failed\n");
     return STATUS_ERROR;
   }
@@ -61,7 +61,7 @@ int read_employees(int fd, struct dbheader_t *dbhdr,
 
   int i = 0;
   for (; i < count; i++) {
-    employees[i].hours = ntohs(employees[i].hours);
+    employees[i].hours = ntohl(employees[i].hours);
   }
 
   *employeesOut = employees;
@@ -103,7 +103,7 @@ int validate_db_header(int fd, struct dbheader_t **headerOut) {
   }
 
   struct dbheader_t *header = calloc(1, sizeof(struct dbheader_t));
-  if (header == NULL) {
+  if (header == (void *)-1) {
     printf("Malloc failed create a db header\n");
     return STATUS_ERROR;
   }
@@ -116,8 +116,8 @@ int validate_db_header(int fd, struct dbheader_t **headerOut) {
 
   header->version = ntohs(header->version);
   header->count = ntohs(header->count);
-  header->magic = ntohs(header->magic);
-  header->filesize = ntohs(header->filesize);
+  header->magic = ntohl(header->magic);
+  header->filesize = ntohl(header->filesize);
 
   if (header->magic != HEADER_MAGIC) {
     printf("Impromper header version\n");
@@ -144,7 +144,7 @@ int validate_db_header(int fd, struct dbheader_t **headerOut) {
 
 int create_db_header(int fd, struct dbheader_t **headerOut) {
   struct dbheader_t *header = calloc(1, sizeof(struct dbheader_t));
-  if (header == NULL) {
+  if (header == (void *)-1) {
     printf("Malloc failed to create db header\n");
     return STATUS_ERROR;
   }

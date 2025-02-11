@@ -36,11 +36,11 @@ int main(int argc, char *argv[]) {
     case 'f':
       filepath = optarg;
       break;
-    case 'a':
-      addstring = optarg;
-      break;
     case 'p':
       portarg = optarg;
+      break;
+    case 'a':
+      addstring = optarg;
       break;
     case 'l':
       list = true;
@@ -78,21 +78,20 @@ int main(int argc, char *argv[]) {
       return -1;
     }
 
-    if (validate_db_header(dbfd, &dbhdr)) {
+    if (validate_db_header(dbfd, &dbhdr) == STATUS_ERROR) {
       printf("Failed to validate database header\n");
       return -1;
     }
   }
 
-  if (read_employees(dbfd, dbhdr, &employees) != STATUS_ERROR) {
+  if (read_employees(dbfd, dbhdr, &employees) != STATUS_SUCCESS) {
     printf("Failed to read employees");
     return 0;
   }
 
   if (addstring) {
     dbhdr->count++;
-    realloc(employees, dbhdr->count);
-
+    employees = realloc(employees, dbhdr->count * (sizeof(struct employee_t)));
     add_employee(dbhdr, employees, addstring);
   }
 
