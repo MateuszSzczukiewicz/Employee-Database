@@ -32,9 +32,9 @@ int add_employee(struct dbheader_t *dbhdr, struct employee_t *employees,
 
   printf("%s %s %s\n", name, addr, hours);
 
-  strncmp(employees[dbhdr->count - 1].name, name,
+  strncpy(employees[dbhdr->count - 1].name, name,
           sizeof(employees[dbhdr->count - 1].name));
-  strncmp(employees[dbhdr->count - 1].address, name,
+  strncpy(employees[dbhdr->count - 1].address, name,
           sizeof(employees[dbhdr->count - 1].address));
 
   employees[dbhdr->count - 1].hours = atoi(hours);
@@ -140,6 +140,8 @@ int validate_db_header(int fd, struct dbheader_t **headerOut) {
   }
 
   *headerOut = header;
+
+  return STATUS_SUCCESS;
 }
 
 int create_db_header(int fd, struct dbheader_t **headerOut) {
