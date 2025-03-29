@@ -25,7 +25,7 @@ int main(int argc, char *argv[]) {
   int c;
 
   int dbfd = -1;
-  struct dbhdr_t *dbhdr = NULL;
+  struct dbheader_t *dbhdr = NULL;
   struct employee_t *employees = NULL;
 
   while ((c = getopt(argc, argv, "nf:a:l")) != -1) {
