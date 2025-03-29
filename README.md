@@ -6,4 +6,3 @@ A simple employee management system that allows adding, removing, and updating e
 
 - Remove an employee by name
 - Update the working hours of an employee by name
-
