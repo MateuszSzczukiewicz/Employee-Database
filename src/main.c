@@ -9,17 +9,20 @@
 #include "parse.h"
 
 void print_usage(char *argv[]) {
-  printf("Usage: %s -n -f <database file>\n", argv[0]);
-  printf("\t -n  -  create new database file\n");
-  printf("\t -f  -  (required) path to database file\n");
-  return;
+  fprintf(stderr,
+          "Usage: %s -f <database file> [-n] [-a <name,addr,hours>] [-1]\n",
+          argv[0]);
+  fprintf(stderr, "\t-f <databse file>  (required) Path to database file\n");
+  fprintf(stderr,
+          "\t-n                 Create a new database file (must not exist)\n");
+  fprintf(stderr,
+          "\t-a <data>          Add employee record (name,address,hours)\n");
+  fprintf(stderr, "\t-l                 List employee records\n");
 }
 
 int main(int argc, char *argv[]) {
   char *filepath = NULL;
-  char *portarg = NULL;
   char *addstring = NULL;
-  unsigned short port = 0;
   bool newfile = false;
   bool list = false;
   int c;
@@ -27,6 +30,7 @@ int main(int argc, char *argv[]) {
   int dbfd = -1;
   struct dbheader_t *dbhdr = NULL;
   struct employee_t *employees = NULL;
+  int ret = EXIT_FAILURE;
 
   while ((c = getopt(argc, argv, "nf:a:l")) != -1) {
     switch (c) {
@@ -36,9 +40,6 @@ int main(int argc, char *argv[]) {
     case 'f':
       filepath = optarg;
       break;
-    case 'p':
-      portarg = optarg;
-      break;
     case 'a':
       addstring = optarg;
       break;
@@ -46,60 +47,90 @@ int main(int argc, char *argv[]) {
       list = true;
       break;
     case '?':
-      printf("Unknown option -%c\n", c);
-      break;
+      print_usage(argv);
+      goto cleanup;
     default:
-      return STATUS_ERROR;
+      print_usage(argv);
+      goto cleanup;
     }
   }
 
   if (filepath == NULL) {
-    printf("Filepath is a required argument\n");
+    fprintf(stderr, "Error: Filepath (-f) is a required argument\n");
     print_usage(argv);
 
-    return STATUS_SUCCESS;
+    goto cleanup;
   }
 
   if (newfile) {
     dbfd = create_db_file(filepath);
     if (dbfd == STATUS_ERROR) {
-      printf("Unable to create database file\n");
-      return STATUS_ERROR;
+      goto cleanup;
     }
 
     if (create_db_header(dbfd, &dbhdr) == STATUS_ERROR) {
-      printf("Failed to open database header\n");
-      return STATUS_ERROR;
+      goto cleanup;
     }
   } else {
     dbfd = open_db_file(filepath);
     if (dbfd == STATUS_ERROR) {
-      printf("Unable to open database file\n");
-      return STATUS_ERROR;
+      goto cleanup;
     }
 
     if (validate_db_header(dbfd, &dbhdr) == STATUS_ERROR) {
-      printf("Failed to validate database header\n");
-      return STATUS_ERROR;
+      goto cleanup;
     }
   }
 
   if (read_employees(dbfd, dbhdr, &employees) != STATUS_SUCCESS) {
-    printf("Failed to read employees");
-    return STATUS_SUCCESS;
+    goto cleanup;
   }
 
   if (addstring) {
     dbhdr->count++;
-    employees = realloc(employees, dbhdr->count * (sizeof(struct employee_t)));
-    add_employee(dbhdr, employees, addstring);
+    struct employee_t *tmp_employees =
+        realloc(employees, dbhdr->count * sizeof(struct employee_t));
+
+    if (tmp_employees == NULL && dbhdr->count > 0) {
+      perror("Error: Failed to reallocate memory for new employee");
+      dbhdr->count--;
+      goto cleanup;
+    }
+    employees = tmp_employees;
+
+    if (add_employee(dbhdr, employees, addstring) != STATUS_SUCCESS) {
+      fprintf(stderr, "Error: Failed to parse or add employee data.\n");
+      goto cleanup;
+    };
   }
 
   if (list) {
     list_employees(dbhdr, employees);
   }
 
-  output_file(dbfd, dbhdr, employees);
+  if (output_file(dbfd, dbhdr, employees) != STATUS_SUCCESS) {
+    goto cleanup;
+  };
 
-  return STATUS_SUCCESS;
+  ret = EXIT_SUCCESS;
+
+cleanup:
+  if (dbhdr != NULL) {
+    free(dbhdr);
+    dbhdr = NULL;
+  }
+  if (employees != NULL) {
+    free(employees);
+    employees = NULL;
+  }
+
+  if (dbfd >= 0) {
+    if (close(dbfd) == -1) {
+      perror("Error closing file descriptor");
+      ret = EXIT_FAILURE;
+    }
+    dbfd = -1;
+  }
+
+  return ret;
 }
