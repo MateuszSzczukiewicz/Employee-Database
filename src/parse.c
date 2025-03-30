@@ -34,8 +34,13 @@ int add_employee(struct dbheader_t *dbhdr, struct employee_t *employees,
 
   strncpy(employees[dbhdr->count - 1].name, name,
           sizeof(employees[dbhdr->count - 1].name));
-  strncpy(employees[dbhdr->count - 1].address, name,
+  employees[dbhdr->count - 1]
+      .name[sizeof(employees[dbhdr->count - 1].name) - 1] = '\0';
+
+  strncpy(employees[dbhdr->count - 1].address, addr,
           sizeof(employees[dbhdr->count - 1].address));
+  employees[dbhdr->count - 1]
+      .address[sizeof(employees[dbhdr->count - 1].address) - 1] = '\0';
 
   employees[dbhdr->count - 1].hours = atoi(hours);
 
@@ -51,13 +56,31 @@ int read_employees(int fd, struct dbheader_t *dbhdr,
 
   int count = dbhdr->count;
 
+  if (count == 0) {
+    *employeesOut = NULL;
+    return STATUS_SUCCESS;
+  }
+
   struct employee_t *employees = calloc(count, sizeof(struct employee_t));
-  if (employees == (void *)-1) {
-    printf("Malloc failed\n");
+  if (employees == NULL) {
+    perror("Failed to allocate memory for employees");
     return STATUS_ERROR;
   }
 
-  read(fd, employees, count * sizeof(struct employee_t));
+  ssize_t bytes_read = read(fd, employees, count * sizeof(struct employee_t));
+
+  if (bytes_read == -1) {
+    perror("Failed to read employees from file");
+    free(employees);
+    return STATUS_ERROR;
+  }
+  if (bytes_read != count * sizeof(struct employee_t)) {
+    fprintf(stderr,
+            "Error: Incomplete read for employees. Expected %zu, got %zd\n",
+            count * sizeof(struct employee_t), bytes_read);
+    free(employees);
+    return STATUS_ERROR;
+  }
 
   int i = 0;
   for (; i < count; i++) {
@@ -83,14 +106,39 @@ int output_file(int fd, struct dbheader_t *dbhdr,
   dbhdr->count = htonl(dbhdr->count);
   dbhdr->version = htonl(dbhdr->version);
 
-  lseek(fd, 0, SEEK_SET);
+  if (lseek(fd, 0, SEEK_SET) == -1) {
+    perror("Failed to seek to beginning of file");
+    return STATUS_ERROR;
+  };
 
-  write(fd, dbhdr, sizeof(struct dbheader_t));
+  ssize_t bytes_written = write(fd, dbhdr, sizeof(struct dbheader_t));
+  if (bytes_written != sizeof(struct dbheader_t)) {
+    fprintf(stderr,
+            "Error: Incomplete write for header. Expected %zu, wrote %zd\n",
+            sizeof(struct dbheader_t), bytes_written);
+    return STATUS_ERROR;
+  }
 
   int i = 0;
   for (; i < realcount; i++) {
     employees[i].hours = htonl(employees[i].hours);
-    write(fd, &employees[i], sizeof(struct employee_t));
+    bytes_written = write(fd, &employees[i], sizeof(struct employee_t));
+    if (bytes_written == -1) {
+      char error_msg[100];
+      snprintf(error_msg, sizeof(error_msg),
+               "Failed to write employee %d to file", i);
+      perror(error_msg);
+      return STATUS_ERROR;
+    }
+    if (bytes_written != sizeof(struct employee_t)) {
+      fprintf(
+          stderr,
+          "Error: Incomplete write for employee %d. Expected %zu, wrote %zd\n",
+          i, sizeof(struct employee_t), bytes_written);
+      return STATUS_ERROR;
+    }
+
+    employees[i].hours = ntohl(employees[i].hours);
   }
 
   return STATUS_SUCCESS;
@@ -103,13 +151,21 @@ int validate_db_header(int fd, struct dbheader_t **headerOut) {
   }
 
   struct dbheader_t *header = calloc(1, sizeof(struct dbheader_t));
-  if (header == (void *)-1) {
+  if (header == NULL) {
     printf("Malloc failed create a db header\n");
     return STATUS_ERROR;
   }
-  if (read(fd, header, sizeof(struct dbheader_t)) !=
-      sizeof(struct dbheader_t)) {
-    perror("read");
+
+  ssize_t bytes_read = read(fd, header, sizeof(struct dbheader_t));
+  if (bytes_read == STATUS_ERROR) {
+    perror("Failed to read header from file");
+    free(header);
+    return STATUS_ERROR;
+  }
+  if (bytes_read != sizeof(struct dbheader_t)) {
+    fprintf(stderr,
+            "Error: Incomplete read for header. Expected %zu, got %zd\n",
+            sizeof(struct dbheader_t), bytes_read);
     free(header);
     return STATUS_ERROR;
   }
@@ -120,21 +176,31 @@ int validate_db_header(int fd, struct dbheader_t **headerOut) {
   header->filesize = ntohl(header->filesize);
 
   if (header->magic != HEADER_MAGIC) {
-    printf("Impromper header version\n");
+    fprintf(stderr, "Error: Invalid magic number. Expected 0x%X, got 0x%X\n",
+            HEADER_MAGIC, header->magic);
     free(header);
     return STATUS_ERROR;
   }
 
   if (header->version != 1) {
-    printf("Impromper header version\n");
+    fprintf(stderr, "Error: Unsupported database version. Expected 1, got %d\n",
+            header->version);
     free(header);
     return STATUS_ERROR;
   }
 
   struct stat dbstat = {0};
-  fstat(fd, &dbstat);
+  if (fstat(fd, &dbstat) == -1) {
+    perror("Failed to get file status");
+    free(header);
+    return STATUS_ERROR;
+  };
+
   if (header->filesize != dbstat.st_size) {
-    printf("Corrupted database\n");
+    fprintf(stderr,
+            "Error: Corrupted database. Header filesize (%u) does not match "
+            "actual file size (%ld).\n",
+            header->filesize, dbstat.st_size);
     free(header);
     return STATUS_ERROR;
   }
@@ -146,8 +212,8 @@ int validate_db_header(int fd, struct dbheader_t **headerOut) {
 
 int create_db_header(int fd, struct dbheader_t **headerOut) {
   struct dbheader_t *header = calloc(1, sizeof(struct dbheader_t));
-  if (header == (void *)-1) {
-    printf("Malloc failed to create db header\n");
+  if (header == NULL) {
+    perror("Malloc failed to create db header");
     return STATUS_ERROR;
   }
 
