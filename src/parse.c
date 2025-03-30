@@ -1,4 +1,6 @@
 #include <arpa/inet.h>
+#include <errno.h>
+#include <limits.h>
 #include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,15 +24,22 @@ void list_employees(struct dbheader_t *dbhdr, struct employee_t *employees) {
 
 int add_employee(struct dbheader_t *dbhdr, struct employee_t *employees,
                  char *addstring) {
-  printf("%s\n", addstring);
+  char *input_copy = strdup(addstring);
+  if (!input_copy) {
+    perror("Failed to duplicate addstring");
+    return STATUS_ERROR;
+  }
 
-  char *name = strtok(addstring, ",");
-
+  char *name = strtok(input_copy, ",");
   char *addr = strtok(NULL, ",");
+  char *hours_str = strtok(NULL, ",");
 
-  char *hours = strtok(NULL, ",");
-
-  printf("%s %s %s\n", name, addr, hours);
+  if (name == NULL || addr == NULL || hours_str == NULL) {
+    fprintf(stderr, "Error: Invalid format for add string. Expected 'name, "
+                    "address,hours'.\n");
+    free(input_copy);
+    return STATUS_ERROR;
+  }
 
   strncpy(employees[dbhdr->count - 1].name, name,
           sizeof(employees[dbhdr->count - 1].name));
@@ -42,8 +51,37 @@ int add_employee(struct dbheader_t *dbhdr, struct employee_t *employees,
   employees[dbhdr->count - 1]
       .address[sizeof(employees[dbhdr->count - 1].address) - 1] = '\0';
 
-  employees[dbhdr->count - 1].hours = atoi(hours);
+  char *endptr;
+  errno = 0;
+  long hours_val = strtol(hours_str, &endptr, 10);
 
+  if (errno != 0) {
+    perror("Error converting hours string (range)");
+    free(input_copy);
+    return STATUS_ERROR;
+  }
+  if (endptr == hours_str) {
+    fprintf(stderr, "Error: Hours string '%s' is not a valid number.\n",
+            hours_str);
+    free(input_copy);
+    return STATUS_ERROR;
+  }
+  if (*endptr != '\0') {
+    fprintf(stderr, "Error: Trailing character after hours number: '%s'",
+            endptr);
+    free(input_copy);
+    return STATUS_ERROR;
+  }
+  if (hours_val < 0 || hours_val > UINT_MAX) {
+    fprintf(stderr, "Error: Hours value %ld out of range for unsigned int.\n",
+            hours_val);
+    free(input_copy);
+    return STATUS_ERROR;
+  }
+
+  employees[dbhdr->count - 1].hours = (unsigned int)hours_val;
+
+  free(input_copy);
   return STATUS_SUCCESS;
 }
 
@@ -100,18 +138,21 @@ int output_file(int fd, struct dbheader_t *dbhdr,
 
   int realcount = dbhdr->count;
 
-  dbhdr->magic = htonl(dbhdr->magic);
-  dbhdr->filesize = htonl(sizeof(struct dbheader_t) +
-                          (sizeof(struct employee_t) * realcount));
-  dbhdr->count = htonl(dbhdr->count);
-  dbhdr->version = htonl(dbhdr->version);
+  struct dbheader_t header_to_write = *dbhdr;
+
+  header_to_write.magic = htonl(dbhdr->magic);
+  header_to_write.filesize = htonl(sizeof(struct dbheader_t) +
+                                   (sizeof(struct employee_t) * realcount));
+  header_to_write.count = htons(dbhdr->count);
+  header_to_write.version = htons(dbhdr->version);
 
   if (lseek(fd, 0, SEEK_SET) == -1) {
     perror("Failed to seek to beginning of file");
     return STATUS_ERROR;
   };
 
-  ssize_t bytes_written = write(fd, dbhdr, sizeof(struct dbheader_t));
+  ssize_t bytes_written =
+      write(fd, &header_to_write, sizeof(struct dbheader_t));
   if (bytes_written != sizeof(struct dbheader_t)) {
     fprintf(stderr,
             "Error: Incomplete write for header. Expected %zu, wrote %zd\n",
@@ -152,7 +193,7 @@ int validate_db_header(int fd, struct dbheader_t **headerOut) {
 
   struct dbheader_t *header = calloc(1, sizeof(struct dbheader_t));
   if (header == NULL) {
-    printf("Malloc failed create a db header\n");
+    perror("Malloc failed create a db header\n");
     return STATUS_ERROR;
   }
 

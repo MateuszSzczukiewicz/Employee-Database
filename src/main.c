@@ -10,9 +10,9 @@
 
 void print_usage(char *argv[]) {
   fprintf(stderr,
-          "Usage: %s -f <database file> [-n] [-a <name,addr,hours>] [-1]\n",
+          "Usage: %s -f <database file> [-n] [-a <name,addr,hours>] [-l]\n",
           argv[0]);
-  fprintf(stderr, "\t-f <databse file>  (required) Path to database file\n");
+  fprintf(stderr, "\t-f <database file>  (required) Path to database file\n");
   fprintf(stderr,
           "\t-n                 Create a new database file (must not exist)\n");
   fprintf(stderr,
