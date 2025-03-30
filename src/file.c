@@ -1,6 +1,5 @@
-#include <stdio.h>
-
 #include <fcntl.h>
+#include <stdio.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -9,16 +8,9 @@
 #include "file.h"
 
 int create_db_file(char *filename) {
-  int fd = open(filename, O_RDWR);
-  if (fd == -1) {
-    close(fd);
-    printf("File already exists\n");
-    return STATUS_ERROR;
-  }
-
-  fd = open(filename, O_RDWR | O_CREAT, 0644);
-  if (fd == -1) {
-    perror("open");
+  int fd = open(filename, O_RDWR | O_CREAT | O_EXCL, 0644);
+  if (fd == STATUS_ERROR) {
+    perror("create_db_file failed");
     return STATUS_ERROR;
   }
 
@@ -26,9 +18,9 @@ int create_db_file(char *filename) {
 }
 
 int open_db_file(char *filename) {
-  int fd = open(filename, O_RDWR, 0644);
-  if (fd == -1) {
-    perror("open");
+  int fd = open(filename, O_RDWR);
+  if (fd == STATUS_ERROR) {
+    perror("open_db_file failed");
     return STATUS_ERROR;
   }
 
