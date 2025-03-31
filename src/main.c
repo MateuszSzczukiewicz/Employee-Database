@@ -23,6 +23,7 @@ void print_usage(char *argv[]) {
 int main(int argc, char *argv[]) {
   char *filepath = NULL;
   char *addstring = NULL;
+  char *username = NULL;
   bool newfile = false;
   bool list = false;
   int c;
@@ -32,7 +33,7 @@ int main(int argc, char *argv[]) {
   struct employee_t *employees = NULL;
   int ret = EXIT_FAILURE;
 
-  while ((c = getopt(argc, argv, "nf:a:l")) != -1) {
+  while ((c = getopt(argc, argv, "nf:a:ld:")) != -1) {
     switch (c) {
     case 'n':
       newfile = true;
@@ -45,6 +46,9 @@ int main(int argc, char *argv[]) {
       break;
     case 'l':
       list = true;
+      break;
+    case 'd':
+      username = optarg;
       break;
     case '?':
       print_usage(argv);
@@ -110,6 +114,10 @@ int main(int argc, char *argv[]) {
 
   if (output_file(dbfd, dbhdr, employees) != STATUS_SUCCESS) {
     goto cleanup;
+  };
+
+  if (username) {
+    delete_employee(dbhdr, &employees, username);
   };
 
   ret = EXIT_SUCCESS;

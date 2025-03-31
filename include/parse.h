@@ -24,5 +24,7 @@ int output_file(int fd, struct dbheader_t *, struct employee_t *employees);
 void list_employees(struct dbheader_t *dbhdr, struct employee_t *employees);
 int add_employee(struct dbheader_t *dbhdr, struct employee_t *employees,
                  char *addstring);
+int delete_employee(struct dbheader_t *dbhdr, struct employee_t **employees,
+                    char *username);
 
 #endif

@@ -85,6 +85,47 @@ int add_employee(struct dbheader_t *dbhdr, struct employee_t *employees,
   return STATUS_SUCCESS;
 }
 
+int delete_employee(struct dbheader_t *dbhdr, struct employee_t **employees,
+                    char *username) {
+  int i = 0;
+  int index = -1;
+
+  for (; i < dbhdr->count; i++) {
+    if (strcmp((*employees)[i].name, username) == 0) {
+      index = i;
+      break;
+    }
+  }
+
+  if (index == -1) {
+    fprintf(stderr, "Error: Employee '%s' not found.\n", username);
+    return STATUS_ERROR;
+  }
+
+  for (i = index; i < dbhdr->count - 1; i++) {
+    *(employees)[i] = *(employees)[i + 1];
+  }
+
+  dbhdr->count--;
+
+  if (dbhdr->count > 0) {
+    struct employee_t *tmp =
+        realloc(*employees, dbhdr->count * sizeof(struct employee_t));
+
+    if (tmp == NULL) {
+      perror("Failed to reallocate memory after deletion");
+      dbhdr->count++;
+      return STATUS_ERROR;
+    }
+    *employees = tmp;
+  } else {
+    free(*employees);
+    *employees = NULL;
+  }
+
+  return STATUS_SUCCESS;
+}
+
 int read_employees(int fd, struct dbheader_t *dbhdr,
                    struct employee_t **employeesOut) {
   if (fd < 0) {
