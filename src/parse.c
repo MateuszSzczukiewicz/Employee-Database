@@ -102,8 +102,9 @@ int delete_employee(struct dbheader_t *dbhdr, struct employee_t **employees,
     return STATUS_ERROR;
   }
 
-  for (i = index; i < dbhdr->count - 1; i++) {
-    *(employees)[i] = *(employees)[i + 1];
+  if (index < dbhdr->count - 1) {
+    memmove(&(*employees)[index], &(*employees)[index + 1],
+            ((dbhdr->count - index - 1) * sizeof(struct employee_t)));
   }
 
   dbhdr->count--;

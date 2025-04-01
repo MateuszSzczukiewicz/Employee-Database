@@ -108,16 +108,18 @@ int main(int argc, char *argv[]) {
     };
   }
 
+  if (username) {
+    if (delete_employee(dbhdr, &employees, username) != STATUS_SUCCESS) {
+      goto cleanup;
+    };
+  };
+
   if (list) {
     list_employees(dbhdr, employees);
   }
 
   if (output_file(dbfd, dbhdr, employees) != STATUS_SUCCESS) {
     goto cleanup;
-  };
-
-  if (username) {
-    delete_employee(dbhdr, &employees, username);
   };
 
   ret = EXIT_SUCCESS;
