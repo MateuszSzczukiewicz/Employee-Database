@@ -17,6 +17,7 @@ void print_usage(char *argv[]) {
           "\t-n                 Create a new database file (must not exist)\n");
   fprintf(stderr,
           "\t-a <data>          Add employee record (name,address,hours)\n");
+  fprintf(stderr, "\t-d <name>          Remove employee record (name)\n");
   fprintf(stderr, "\t-l                 List employee records\n");
 }
 
@@ -29,8 +30,8 @@ int main(int argc, char *argv[]) {
   int c;
 
   int dbfd = -1;
-  struct dbheader_t *dbhdr = NULL;
-  struct employee_t *employees = NULL;
+  dbheader_t *dbhdr = NULL;
+  employee_t *employees = NULL;
   int ret = EXIT_FAILURE;
 
   while ((c = getopt(argc, argv, "nf:a:ld:")) != -1) {
@@ -91,19 +92,7 @@ int main(int argc, char *argv[]) {
   }
 
   if (addstring) {
-    dbhdr->count++;
-    struct employee_t *tmp_employees =
-        realloc(employees, dbhdr->count * sizeof(struct employee_t));
-
-    if (tmp_employees == NULL && dbhdr->count > 0) {
-      perror("Error: Failed to reallocate memory for new employee");
-      dbhdr->count--;
-      goto cleanup;
-    }
-    employees = tmp_employees;
-
-    if (add_employee(dbhdr, employees, addstring) != STATUS_SUCCESS) {
-      fprintf(stderr, "Error: Failed to parse or add employee data.\n");
+    if (add_employee(dbhdr, &employees, addstring) != STATUS_SUCCESS) {
       goto cleanup;
     };
   }

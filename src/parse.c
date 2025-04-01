@@ -2,6 +2,7 @@
 #include <errno.h>
 #include <limits.h>
 #include <netinet/in.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,9 +13,8 @@
 #include "common.h"
 #include "parse.h"
 
-void list_employees(struct dbheader_t *dbhdr, struct employee_t *employees) {
-  int i = 0;
-  for (; i < dbhdr->count; i++) {
+void list_employees(dbheader_t *dbhdr, employee_t *employees) {
+  for (int i = 0; i < dbhdr->count; i++) {
     printf("Employee %d\n", i);
     printf("\tName: %s\n", employees[i].name);
     printf("\tAddress: %s\n", employees[i].address);
@@ -22,11 +22,22 @@ void list_employees(struct dbheader_t *dbhdr, struct employee_t *employees) {
   }
 }
 
-int add_employee(struct dbheader_t *dbhdr, struct employee_t *employees,
+int add_employee(dbheader_t *dbhdr, employee_t **employees_ptr,
                  char *addstring) {
+  dbhdr->count++;
+  employee_t *tmp = realloc(*employees_ptr, dbhdr->count * sizeof(employee_t));
+
+  if (tmp == NULL && dbhdr->count > 0) {
+    perror("Error: Failed to reallocate memory for new employee");
+    dbhdr->count--;
+    return STATUS_ERROR;
+  }
+  *employees_ptr = tmp;
+
   char *input_copy = strdup(addstring);
   if (!input_copy) {
     perror("Failed to duplicate addstring");
+    dbhdr->count--;
     return STATUS_ERROR;
   }
 
@@ -38,8 +49,34 @@ int add_employee(struct dbheader_t *dbhdr, struct employee_t *employees,
     fprintf(stderr, "Error: Invalid format for add string. Expected 'name, "
                     "address,hours'.\n");
     free(input_copy);
+    dbhdr->count--;
     return STATUS_ERROR;
   }
+
+  char *endptr;
+  errno = 0;
+  long hours_val = strtol(hours_str, &endptr, 10);
+
+  if (errno != 0 || endptr == hours_str || *endptr != '\0' || hours_val < 0 ||
+      hours_val > UINT_MAX) {
+    if (errno != 0)
+      perror("Error converting hours string (range)");
+    else if (endptr == hours_str)
+      fprintf(stderr, "Error: Hours string '%s' is not a valid number.\n",
+              hours_str);
+    else if (*endptr != '\0')
+      fprintf(stderr, "Error: Trailing character after hours number: '%s'\n",
+              endptr);
+    else
+      fprintf(stderr, "Error: Hours value %ld out of range for unsigned int.\n",
+              hours_val);
+
+    free(input_copy);
+    dbhdr->count--;
+    return STATUS_ERROR;
+  }
+
+  employee_t *employees = *employees_ptr;
 
   strncpy(employees[dbhdr->count - 1].name, name,
           sizeof(employees[dbhdr->count - 1].name));
@@ -51,47 +88,18 @@ int add_employee(struct dbheader_t *dbhdr, struct employee_t *employees,
   employees[dbhdr->count - 1]
       .address[sizeof(employees[dbhdr->count - 1].address) - 1] = '\0';
 
-  char *endptr;
-  errno = 0;
-  long hours_val = strtol(hours_str, &endptr, 10);
-
-  if (errno != 0) {
-    perror("Error converting hours string (range)");
-    free(input_copy);
-    return STATUS_ERROR;
-  }
-  if (endptr == hours_str) {
-    fprintf(stderr, "Error: Hours string '%s' is not a valid number.\n",
-            hours_str);
-    free(input_copy);
-    return STATUS_ERROR;
-  }
-  if (*endptr != '\0') {
-    fprintf(stderr, "Error: Trailing character after hours number: '%s'",
-            endptr);
-    free(input_copy);
-    return STATUS_ERROR;
-  }
-  if (hours_val < 0 || hours_val > UINT_MAX) {
-    fprintf(stderr, "Error: Hours value %ld out of range for unsigned int.\n",
-            hours_val);
-    free(input_copy);
-    return STATUS_ERROR;
-  }
-
   employees[dbhdr->count - 1].hours = (unsigned int)hours_val;
 
   free(input_copy);
   return STATUS_SUCCESS;
 }
 
-int delete_employee(struct dbheader_t *dbhdr, struct employee_t **employees,
+int delete_employee(dbheader_t *dbhdr, employee_t **employees_ptr,
                     char *username) {
-  int i = 0;
   int index = -1;
 
-  for (; i < dbhdr->count; i++) {
-    if (strcmp((*employees)[i].name, username) == 0) {
+  for (int i = 0; i < dbhdr->count; i++) {
+    if (strcmp((*employees_ptr)[i].name, username) == 0) {
       index = i;
       break;
     }
@@ -103,32 +111,31 @@ int delete_employee(struct dbheader_t *dbhdr, struct employee_t **employees,
   }
 
   if (index < dbhdr->count - 1) {
-    memmove(&(*employees)[index], &(*employees)[index + 1],
-            ((dbhdr->count - index - 1) * sizeof(struct employee_t)));
+    memmove(&(*employees_ptr)[index], &(*employees_ptr)[index + 1],
+            ((dbhdr->count - index - 1) * sizeof(employee_t)));
   }
 
   dbhdr->count--;
 
   if (dbhdr->count > 0) {
-    struct employee_t *tmp =
-        realloc(*employees, dbhdr->count * sizeof(struct employee_t));
+    employee_t *tmp =
+        realloc(*employees_ptr, dbhdr->count * sizeof(employee_t));
 
     if (tmp == NULL) {
       perror("Failed to reallocate memory after deletion");
       dbhdr->count++;
       return STATUS_ERROR;
     }
-    *employees = tmp;
+    *employees_ptr = tmp;
   } else {
-    free(*employees);
-    *employees = NULL;
+    free(*employees_ptr);
+    *employees_ptr = NULL;
   }
 
   return STATUS_SUCCESS;
 }
 
-int read_employees(int fd, struct dbheader_t *dbhdr,
-                   struct employee_t **employeesOut) {
+int read_employees(int fd, dbheader_t *dbhdr, employee_t **employeesOut) {
   if (fd < 0) {
     printf("Got a bad FD from the user\n");
     return STATUS_ERROR;
@@ -141,29 +148,28 @@ int read_employees(int fd, struct dbheader_t *dbhdr,
     return STATUS_SUCCESS;
   }
 
-  struct employee_t *employees = calloc(count, sizeof(struct employee_t));
+  employee_t *employees = calloc(count, sizeof(employee_t));
   if (employees == NULL) {
     perror("Failed to allocate memory for employees");
     return STATUS_ERROR;
   }
 
-  ssize_t bytes_read = read(fd, employees, count * sizeof(struct employee_t));
+  ssize_t bytes_read = read(fd, employees, count * sizeof(employee_t));
 
   if (bytes_read == -1) {
     perror("Failed to read employees from file");
     free(employees);
     return STATUS_ERROR;
   }
-  if (bytes_read != count * sizeof(struct employee_t)) {
+  if (bytes_read != count * sizeof(employee_t)) {
     fprintf(stderr,
             "Error: Incomplete read for employees. Expected %zu, got %zd\n",
-            count * sizeof(struct employee_t), bytes_read);
+            count * sizeof(employee_t), bytes_read);
     free(employees);
     return STATUS_ERROR;
   }
 
-  int i = 0;
-  for (; i < count; i++) {
+  for (int i = 0; i < count; i++) {
     employees[i].hours = ntohl(employees[i].hours);
   }
 
@@ -171,8 +177,7 @@ int read_employees(int fd, struct dbheader_t *dbhdr,
   return STATUS_SUCCESS;
 }
 
-int output_file(int fd, struct dbheader_t *dbhdr,
-                struct employee_t *employees) {
+int output_file(int fd, dbheader_t *dbhdr, employee_t *employees) {
   if (fd < 0) {
     printf("Got a bad FD from the user\n");
     return STATUS_ERROR;
@@ -180,11 +185,11 @@ int output_file(int fd, struct dbheader_t *dbhdr,
 
   int realcount = dbhdr->count;
 
-  struct dbheader_t header_to_write = *dbhdr;
+  dbheader_t header_to_write = *dbhdr;
 
   header_to_write.magic = htonl(dbhdr->magic);
-  header_to_write.filesize = htonl(sizeof(struct dbheader_t) +
-                                   (sizeof(struct employee_t) * realcount));
+  header_to_write.filesize =
+      htonl(sizeof(dbheader_t) + (sizeof(employee_t) * realcount));
   header_to_write.count = htons(dbhdr->count);
   header_to_write.version = htons(dbhdr->version);
 
@@ -193,19 +198,17 @@ int output_file(int fd, struct dbheader_t *dbhdr,
     return STATUS_ERROR;
   };
 
-  ssize_t bytes_written =
-      write(fd, &header_to_write, sizeof(struct dbheader_t));
-  if (bytes_written != sizeof(struct dbheader_t)) {
+  ssize_t bytes_written = write(fd, &header_to_write, sizeof(dbheader_t));
+  if (bytes_written != sizeof(dbheader_t)) {
     fprintf(stderr,
             "Error: Incomplete write for header. Expected %zu, wrote %zd\n",
-            sizeof(struct dbheader_t), bytes_written);
+            sizeof(dbheader_t), bytes_written);
     return STATUS_ERROR;
   }
 
-  int i = 0;
-  for (; i < realcount; i++) {
+  for (int i = 0; i < realcount; i++) {
     employees[i].hours = htonl(employees[i].hours);
-    bytes_written = write(fd, &employees[i], sizeof(struct employee_t));
+    bytes_written = write(fd, &employees[i], sizeof(employee_t));
     if (bytes_written == -1) {
       char error_msg[100];
       snprintf(error_msg, sizeof(error_msg),
@@ -213,11 +216,11 @@ int output_file(int fd, struct dbheader_t *dbhdr,
       perror(error_msg);
       return STATUS_ERROR;
     }
-    if (bytes_written != sizeof(struct employee_t)) {
+    if (bytes_written != sizeof(employee_t)) {
       fprintf(
           stderr,
           "Error: Incomplete write for employee %d. Expected %zu, wrote %zd\n",
-          i, sizeof(struct employee_t), bytes_written);
+          i, sizeof(employee_t), bytes_written);
       return STATUS_ERROR;
     }
 
@@ -227,28 +230,28 @@ int output_file(int fd, struct dbheader_t *dbhdr,
   return STATUS_SUCCESS;
 }
 
-int validate_db_header(int fd, struct dbheader_t **headerOut) {
+int validate_db_header(int fd, dbheader_t **headerOut) {
   if (fd < 0) {
     printf("Got a bad FD from the user\n");
     return STATUS_ERROR;
   }
 
-  struct dbheader_t *header = calloc(1, sizeof(struct dbheader_t));
+  dbheader_t *header = calloc(1, sizeof(dbheader_t));
   if (header == NULL) {
     perror("Malloc failed create a db header\n");
     return STATUS_ERROR;
   }
 
-  ssize_t bytes_read = read(fd, header, sizeof(struct dbheader_t));
+  ssize_t bytes_read = read(fd, header, sizeof(dbheader_t));
   if (bytes_read == STATUS_ERROR) {
     perror("Failed to read header from file");
     free(header);
     return STATUS_ERROR;
   }
-  if (bytes_read != sizeof(struct dbheader_t)) {
+  if (bytes_read != sizeof(dbheader_t)) {
     fprintf(stderr,
             "Error: Incomplete read for header. Expected %zu, got %zd\n",
-            sizeof(struct dbheader_t), bytes_read);
+            sizeof(dbheader_t), bytes_read);
     free(header);
     return STATUS_ERROR;
   }
@@ -293,8 +296,8 @@ int validate_db_header(int fd, struct dbheader_t **headerOut) {
   return STATUS_SUCCESS;
 }
 
-int create_db_header(int fd, struct dbheader_t **headerOut) {
-  struct dbheader_t *header = calloc(1, sizeof(struct dbheader_t));
+int create_db_header(int fd, dbheader_t **headerOut) {
+  dbheader_t *header = calloc(1, sizeof(dbheader_t));
   if (header == NULL) {
     perror("Malloc failed to create db header");
     return STATUS_ERROR;
@@ -303,7 +306,7 @@ int create_db_header(int fd, struct dbheader_t **headerOut) {
   header->version = 0x1;
   header->count = 0;
   header->magic = HEADER_MAGIC;
-  header->filesize = sizeof(struct dbheader_t);
+  header->filesize = sizeof(dbheader_t);
 
   *headerOut = header;
 
