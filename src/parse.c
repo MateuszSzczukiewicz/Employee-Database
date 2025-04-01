@@ -3,6 +3,7 @@
 #include <limits.h>
 #include <netinet/in.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -179,17 +180,19 @@ int read_employees(int fd, dbheader_t *dbhdr, employee_t **employeesOut) {
 
 int output_file(int fd, dbheader_t *dbhdr, employee_t *employees) {
   if (fd < 0) {
-    printf("Got a bad FD from the user\n");
+    fprintf(stderr, "Got a bad FD from the user\n");
     return STATUS_ERROR;
   }
 
   int realcount = dbhdr->count;
 
+  off_t final_filesize =
+      sizeof(dbheader_t) + ((off_t)realcount * sizeof(employee_t));
+
   dbheader_t header_to_write = *dbhdr;
 
   header_to_write.magic = htonl(dbhdr->magic);
-  header_to_write.filesize =
-      htonl(sizeof(dbheader_t) + (sizeof(employee_t) * realcount));
+  header_to_write.filesize = htonl((u_int32_t)final_filesize);
   header_to_write.count = htons(dbhdr->count);
   header_to_write.version = htons(dbhdr->version);
 
@@ -199,6 +202,11 @@ int output_file(int fd, dbheader_t *dbhdr, employee_t *employees) {
   };
 
   ssize_t bytes_written = write(fd, &header_to_write, sizeof(dbheader_t));
+  if (bytes_written == STATUS_ERROR) {
+    perror("Failed to write header");
+    return STATUS_ERROR;
+  }
+
   if (bytes_written != sizeof(dbheader_t)) {
     fprintf(stderr,
             "Error: Incomplete write for header. Expected %zu, wrote %zd\n",
@@ -207,8 +215,15 @@ int output_file(int fd, dbheader_t *dbhdr, employee_t *employees) {
   }
 
   for (int i = 0; i < realcount; i++) {
-    employees[i].hours = htonl(employees[i].hours);
+    uint32_t original_hours = employees[i].hours;
+    uint32_t network_hours = htonl(original_hours);
+
+    employees[i].hours = network_hours;
+
     bytes_written = write(fd, &employees[i], sizeof(employee_t));
+
+    employees[i].hours = original_hours;
+
     if (bytes_written == -1) {
       char error_msg[100];
       snprintf(error_msg, sizeof(error_msg),
@@ -223,8 +238,11 @@ int output_file(int fd, dbheader_t *dbhdr, employee_t *employees) {
           i, sizeof(employee_t), bytes_written);
       return STATUS_ERROR;
     }
+  }
 
-    employees[i].hours = ntohl(employees[i].hours);
+  if (ftruncate(fd, final_filesize) == -1) {
+    perror("Failed to ftruncate file to final size");
+    return STATUS_ERROR;
   }
 
   return STATUS_SUCCESS;
