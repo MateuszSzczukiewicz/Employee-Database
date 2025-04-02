@@ -2,7 +2,3 @@
 
 A simple employee management system that allows adding, removing,
 and updating employee data.
-
-## TODO
-
-- Update the working hours of an employee by name

@@ -14,6 +14,49 @@
 #include "common.h"
 #include "parse.h"
 
+static int find_employee_index(dbheader_t *dbhdr, employee_t *employees,
+                               const char *name) {
+  if (!employees || !name) {
+    return STATUS_ERROR;
+  }
+  for (int i = 0; i < dbhdr->count; i++) {
+    if (strcmp(employees[i].name, name) == 0) {
+      return i;
+    }
+  }
+  return STATUS_ERROR;
+}
+
+static int parse_and_validate_hours(const char *hours_str,
+                                    unsigned int *out_hours) {
+  if (!hours_str || !out_hours) {
+    return STATUS_ERROR;
+  }
+
+  char *endptr;
+  errno = 0;
+  long hours_val = strtol(hours_str, &endptr, 10);
+
+  if (errno != 0 || endptr == hours_str || *endptr != '\0' || hours_val < 0 ||
+      hours_val > UINT_MAX) {
+    if (errno != 0)
+      perror("Error converting hours string (range)");
+    else if (endptr == hours_str)
+      fprintf(stderr, "Error: Hours string '%s' is not a valid number.\n",
+              hours_str);
+    else if (*endptr != '\0')
+      fprintf(stderr, "Error: Trailing character after hours number: '%s'\n",
+              endptr);
+    else
+      fprintf(stderr, "Error: Hours value %ld out of range for unsigned int.\n",
+              hours_val);
+    return STATUS_ERROR;
+  }
+
+  *out_hours = (unsigned int)hours_val;
+  return STATUS_SUCCESS;
+}
+
 void list_employees(dbheader_t *dbhdr, employee_t *employees) {
   for (int i = 0; i < dbhdr->count; i++) {
     printf("Employee %d\n", i);
@@ -54,24 +97,8 @@ int add_employee(dbheader_t *dbhdr, employee_t **employees_ptr,
     return STATUS_ERROR;
   }
 
-  char *endptr;
-  errno = 0;
-  long hours_val = strtol(hours_str, &endptr, 10);
-
-  if (errno != 0 || endptr == hours_str || *endptr != '\0' || hours_val < 0 ||
-      hours_val > UINT_MAX) {
-    if (errno != 0)
-      perror("Error converting hours string (range)");
-    else if (endptr == hours_str)
-      fprintf(stderr, "Error: Hours string '%s' is not a valid number.\n",
-              hours_str);
-    else if (*endptr != '\0')
-      fprintf(stderr, "Error: Trailing character after hours number: '%s'\n",
-              endptr);
-    else
-      fprintf(stderr, "Error: Hours value %ld out of range for unsigned int.\n",
-              hours_val);
-
+  unsigned int parsed_hours;
+  if (parse_and_validate_hours(hours_str, &parsed_hours) != STATUS_SUCCESS) {
     free(input_copy);
     dbhdr->count--;
     return STATUS_ERROR;
@@ -89,7 +116,47 @@ int add_employee(dbheader_t *dbhdr, employee_t **employees_ptr,
   employees[dbhdr->count - 1]
       .address[sizeof(employees[dbhdr->count - 1].address) - 1] = '\0';
 
-  employees[dbhdr->count - 1].hours = (unsigned int)hours_val;
+  employees[dbhdr->count - 1].hours = (unsigned int)parsed_hours;
+
+  free(input_copy);
+  return STATUS_SUCCESS;
+}
+
+int update_working_hours(dbheader_t *dbhdr, employee_t *employees,
+                         char *updatestring) {
+
+  char *input_copy = strdup(updatestring);
+  if (!input_copy) {
+    perror("Failed to duplicate updatestring");
+    return STATUS_ERROR;
+  }
+
+  char *name = strtok(input_copy, ",");
+  char *hours_str = strtok(NULL, ",");
+
+  if (name == NULL || hours_str == NULL) {
+    fprintf(
+        stderr,
+        "Error: Invalid format for update string. Expected 'name, hours'.\n");
+    free(input_copy);
+    return STATUS_ERROR;
+  }
+
+  unsigned int parsed_hours;
+  if (parse_and_validate_hours(hours_str, &parsed_hours) != STATUS_SUCCESS) {
+    free(input_copy);
+    return STATUS_ERROR;
+  }
+
+  int index = find_employee_index(dbhdr, employees, name);
+
+  if (index == -1) {
+    fprintf(stderr, "Error: Employee '%s' not found.\n", name);
+    free(input_copy);
+    return STATUS_ERROR;
+  }
+
+  employees[index].hours = (unsigned int)parsed_hours;
 
   free(input_copy);
   return STATUS_SUCCESS;
@@ -97,14 +164,14 @@ int add_employee(dbheader_t *dbhdr, employee_t **employees_ptr,
 
 int delete_employee(dbheader_t *dbhdr, employee_t **employees_ptr,
                     char *username) {
-  int index = -1;
-
-  for (int i = 0; i < dbhdr->count; i++) {
-    if (strcmp((*employees_ptr)[i].name, username) == 0) {
-      index = i;
-      break;
-    }
+  if (dbhdr->count == 0 || *employees_ptr == NULL) {
+    fprintf(stderr, "Error: Database is empty, cannot delete.\n");
+    return STATUS_ERROR;
   }
+
+  employee_t *employees = *employees_ptr;
+
+  int index = find_employee_index(dbhdr, employees, username);
 
   if (index == -1) {
     fprintf(stderr, "Error: Employee '%s' not found.\n", username);

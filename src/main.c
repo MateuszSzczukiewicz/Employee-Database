@@ -17,6 +17,7 @@ void print_usage(char *argv[]) {
           "\t-n                 Create a new database file (must not exist)\n");
   fprintf(stderr,
           "\t-a <data>          Add employee record (name,address,hours)\n");
+  fprintf(stderr, "\t-u <data>          Update employee hours (name,hours)\n");
   fprintf(stderr, "\t-d <name>          Remove employee record (name)\n");
   fprintf(stderr, "\t-l                 List employee records\n");
 }
@@ -24,6 +25,7 @@ void print_usage(char *argv[]) {
 int main(int argc, char *argv[]) {
   char *filepath = NULL;
   char *addstring = NULL;
+  char *updatestring = NULL;
   char *username = NULL;
   bool newfile = false;
   bool list = false;
@@ -34,7 +36,7 @@ int main(int argc, char *argv[]) {
   employee_t *employees = NULL;
   int ret = EXIT_FAILURE;
 
-  while ((c = getopt(argc, argv, "nf:a:ld:")) != -1) {
+  while ((c = getopt(argc, argv, "nf:a:lu:d:")) != -1) {
     switch (c) {
     case 'n':
       newfile = true;
@@ -47,6 +49,9 @@ int main(int argc, char *argv[]) {
       break;
     case 'l':
       list = true;
+      break;
+    case 'u':
+      updatestring = optarg;
       break;
     case 'd':
       username = optarg;
@@ -97,11 +102,18 @@ int main(int argc, char *argv[]) {
     };
   }
 
+  if (updatestring) {
+    if (update_working_hours(dbhdr, employees, updatestring) !=
+        STATUS_SUCCESS) {
+      goto cleanup;
+    };
+  }
+
   if (username) {
     if (delete_employee(dbhdr, &employees, username) != STATUS_SUCCESS) {
       goto cleanup;
-    };
-  };
+    }
+  }
 
   if (list) {
     list_employees(dbhdr, employees);
