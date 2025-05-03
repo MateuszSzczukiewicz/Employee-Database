@@ -142,8 +142,7 @@ int poll_loop(unsigned short port, dbheader_t *dbhdr, employee_t *employees) {
             nfds--;
           }
         } else {
-          printf("Received data from client: %s\n", clientStates[slot].buffer);
-          // handle_client_fsm(dbhdr, employees, &clientStates[slot]);
+          handle_client_fsm(dbhdr, employees, &clientStates[slot]);
         }
       }
     }
