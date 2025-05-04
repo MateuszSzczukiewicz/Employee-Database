@@ -23,8 +23,8 @@ typedef struct {
   char buffer[4096];
 } clientstate_t;
 
-void handle_client_fsm(dbheader_t *dbhdr, employee_t *emplyees,
-                       clientstate_t *client);
+void handle_client_fsm(dbheader_t *dbhdr, employee_t **employees,
+                       clientstate_t *client, int dbfd);
 
 void init_clients(clientstate_t *states);
 

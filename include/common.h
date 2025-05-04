@@ -18,6 +18,7 @@ typedef enum {
   MSG_EMPLOYEE_ADD_RESP,
   MSG_EMPLOYEE_DEL_REQ,
   MSG_EMPLOYEE_DEL_RESP,
+  MSG_ERROR,
 } dbproto_type_e;
 
 typedef struct {
@@ -33,4 +34,7 @@ typedef struct {
   u_int16_t proto;
 } dbproto_hello_resp;
 
+typedef struct {
+  u_int8_t data[1024];
+} dbproto_employee_add_req;
 #endif

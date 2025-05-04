@@ -312,6 +312,11 @@ int output_file(int fd, dbheader_t *dbhdr, employee_t *employees) {
     return STATUS_ERROR;
   }
 
+  header_to_write.magic = ntohl(dbhdr->magic);
+  header_to_write.filesize = ntohl((u_int32_t)final_filesize);
+  header_to_write.count = ntohs(dbhdr->count);
+  header_to_write.version = ntohs(dbhdr->version);
+
   return STATUS_SUCCESS;
 }
 

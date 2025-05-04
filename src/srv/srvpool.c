@@ -1,4 +1,3 @@
-#include <arpa/inet.h>
 #include <netinet/in.h>
 #include <poll.h>
 #include <stdio.h>
@@ -10,8 +9,24 @@
 #include "common.h"
 #include "srvpoll.h"
 
-void handle_client_fsm(dbheader_t *dbhdr, employee_t *emplyees,
-                       clientstate_t *client) {
+void fsm_reply_hello(clientstate_t *client, dbproto_hdr_t *hdr) {
+  hdr->type = htonl(MSG_HELLO_RESP);
+  hdr->len = htons(1);
+  dbproto_hello_resp *hello = (dbproto_hello_resp *)&hdr[1];
+  hello->proto = htons(PROTO_VER);
+
+  write(client->fd, hdr, sizeof(dbproto_hdr_t) + sizeof(dbproto_hello_resp));
+}
+
+void fsm_reply_hello_err(clientstate_t *client, dbproto_hdr_t *hdr) {
+  hdr->type = htonl(MSG_ERROR);
+  hdr->len = htons(0);
+
+  write(client->fd, hdr, sizeof(dbproto_hdr_t));
+}
+
+void handle_client_fsm(dbheader_t *dbhdr, employee_t **employees,
+                       clientstate_t *client, int dbfd) {
   dbproto_hdr_t *hdr = (dbproto_hdr_t *)client->buffer;
 
   hdr->type = ntohl(hdr->type);
@@ -20,20 +35,37 @@ void handle_client_fsm(dbheader_t *dbhdr, employee_t *emplyees,
   if (client->state == STATE_HELLO) {
     if (hdr->type != MSG_HELLO_REQ || hdr->len != 1) {
       printf("Didn't get MSG_HELLO in HELLO state...\n");
+      fsm_reply_hello_err(client, hdr);
+      return;
     }
 
     dbproto_hello_req *hello = (dbproto_hello_req *)&hdr[1];
     hello->proto = ntohs(hello->proto);
     if (hello->proto != PROTO_VER) {
       printf("Protocol mismatch...\n");
-      // TODO: send err msg
+      fsm_reply_hello_err(client, hdr);
+      return;
     }
 
-    // TODO: send hello resp
+    fsm_reply_hello(client, hdr);
     client->state = STATE_MSG;
+    printf("Client upgraded to STATE_MSG.\n");
   }
 
   if (client->state == STATE_MSG) {
+    if (hdr->type == MSG_EMPLOYEE_ADD_REQ) {
+      dbproto_employee_add_req *employee = (dbproto_employee_add_req *)&hdr[1];
+
+      printf("Adding employee: %s\n", employee->data);
+      if (add_employee(dbhdr, employees, (char *)employee->data) !=
+          STATUS_SUCCESS) {
+        // fsm_reply_add_err(client, hdr);
+        return;
+      } else {
+        // fsm_reply_add(client, hdr);
+        output_file(dbfd, dbhdr, *employees);
+      }
+    }
   }
 }
 

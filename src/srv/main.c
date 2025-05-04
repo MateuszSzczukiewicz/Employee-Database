@@ -142,7 +142,7 @@ int poll_loop(unsigned short port, dbheader_t *dbhdr, employee_t *employees) {
             nfds--;
           }
         } else {
-          handle_client_fsm(dbhdr, employees, &clientStates[slot]);
+          handle_client_fsm(dbhdr, &employees, &clientStates[slot], fd);
         }
       }
     }
