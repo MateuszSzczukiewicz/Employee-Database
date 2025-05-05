@@ -124,7 +124,7 @@ int main(int argc, char *argv[]) {
   bool list = false;
 
   int c;
-  while ((c = getopt(argc, argv, "p:h:a:")) != -1) {
+  while ((c = getopt(argc, argv, "p:h:a:l")) != -1) {
     switch (c) {
     case 'a':
       addarg = optarg;
