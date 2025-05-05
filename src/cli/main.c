@@ -1,6 +1,7 @@
 #include <arpa/inet.h>
 #include <bits/getopt_core.h>
 #include <netinet/in.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,6 +11,45 @@
 #include <unistd.h>
 
 #include "common.h"
+
+int list_employees(int fd) {
+  dbproto_hdr_t buf[4096] = {0};
+
+  dbproto_hdr_t *hdr = buf;
+  hdr->type = MSG_EMPLOYEE_LIST_REQ;
+  hdr->len = 0;
+
+  hdr->type = htonl(hdr->type);
+  hdr->len = htons(hdr->len);
+
+  write(fd, buf, sizeof(dbproto_hdr_t) + sizeof(dbproto_employee_add_req));
+
+  read(fd, hdr, sizeof(dbproto_hdr_t));
+
+  hdr->type = ntohl(hdr->type);
+  hdr->len = ntohs(hdr->len);
+
+  if (hdr->type == MSG_ERROR) {
+    printf("Unable to list employees.\n");
+    close(fd);
+    return STATUS_ERROR;
+  }
+
+  if (hdr->type == MSG_EMPLOYEE_LIST_RESP) {
+    printf("Listing employees...\n");
+    dbproto_employee_list_resp *employee =
+        (dbproto_employee_list_resp *)&hdr[1];
+
+    for (int i = 0; i < hdr->len; i++) {
+      read(fd, employee, sizeof(dbproto_employee_list_resp));
+      employee->hours = ntohl(employee->hours);
+      printf("%s, %s, %d\n", employee->name, employee->address,
+             employee->hours);
+    }
+  }
+
+  return STATUS_SUCCESS;
+}
 
 int send_employee(int fd, char *addstr) {
   dbproto_hdr_t buf[4096] = {0};
@@ -81,12 +121,16 @@ int main(int argc, char *argv[]) {
   char *addarg = NULL;
   char *portarg = NULL, *hostarg = NULL;
   unsigned short port = 0;
+  bool list = false;
 
   int c;
   while ((c = getopt(argc, argv, "p:h:a:")) != -1) {
     switch (c) {
     case 'a':
       addarg = optarg;
+      break;
+    case 'l':
+      list = true;
       break;
     case 'p':
       portarg = optarg;
@@ -109,13 +153,14 @@ int main(int argc, char *argv[]) {
 
   if (hostarg == NULL) {
     printf("Must specify host with -h\n");
+    return -1;
   }
 
   struct sockaddr_in serverInfo = {0};
 
   serverInfo.sin_family = AF_INET;
-  serverInfo.sin_addr.s_addr = inet_addr(argv[1]);
-  serverInfo.sin_port = htons(8080);
+  serverInfo.sin_addr.s_addr = inet_addr(hostarg);
+  serverInfo.sin_port = htons(port);
 
   int fd = socket(AF_INET, SOCK_STREAM, 0);
   if (fd == -1) {
@@ -135,6 +180,10 @@ int main(int argc, char *argv[]) {
 
   if (addarg) {
     send_employee(fd, addarg);
+  }
+
+  if (list) {
+    list_employees(fd);
   }
 
   close(fd);

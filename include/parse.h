@@ -20,7 +20,6 @@ int create_db_header(int fd, dbheader_t **headerOut);
 int validate_db_header(int fd, dbheader_t **headerOut);
 int read_employees(int fd, dbheader_t *, employee_t **employeesOut);
 int output_file(int fd, dbheader_t *, employee_t *employees);
-void list_employees(dbheader_t *dbhdr, employee_t *employees);
 int add_employee(dbheader_t *dbhdr, employee_t **employees_ptr,
                  char *addstring);
 int update_working_hours(dbheader_t *dbhdr, employee_t *employees,

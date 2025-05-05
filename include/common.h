@@ -38,3 +38,9 @@ typedef struct {
   u_int8_t data[1024];
 } dbproto_employee_add_req;
 #endif
+
+typedef struct {
+  char name[256];
+  char address[256];
+  unsigned int hours;
+} dbproto_employee_list_resp;
