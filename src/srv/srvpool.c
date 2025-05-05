@@ -18,11 +18,60 @@ void fsm_reply_hello(clientstate_t *client, dbproto_hdr_t *hdr) {
   write(client->fd, hdr, sizeof(dbproto_hdr_t) + sizeof(dbproto_hello_resp));
 }
 
+void fsm_reply_add(clientstate_t *client, dbproto_hdr_t *hdr) {
+  hdr->type = htonl(MSG_EMPLOYEE_ADD_RESP);
+  hdr->len = htons(0);
+
+  write(client->fd, hdr, sizeof(dbproto_hdr_t));
+}
+
 void fsm_reply_hello_err(clientstate_t *client, dbproto_hdr_t *hdr) {
   hdr->type = htonl(MSG_ERROR);
   hdr->len = htons(0);
 
   write(client->fd, hdr, sizeof(dbproto_hdr_t));
+}
+
+void fsm_reply_add_err(clientstate_t *client, dbproto_hdr_t *hdr) {
+  hdr->type = htonl(MSG_ERROR);
+  hdr->len = htons(0);
+
+  write(client->fd, hdr, sizeof(dbproto_hdr_t));
+}
+
+int send_employee(int fd, char *addstr) {
+  dbproto_hdr_t buf[4096] = {0};
+
+  dbproto_hdr_t *hdr = buf;
+  hdr->type = MSG_EMPLOYEE_ADD_REQ;
+  hdr->len = 1;
+
+  dbproto_employee_add_req *employee = (dbproto_employee_add_req *)&hdr[1];
+  strncpy((char *)&employee->data, addstr, sizeof(employee->data));
+
+  employee->data[sizeof(employee->data) - 1] = '\0';
+
+  hdr->type = htons(hdr->type);
+  hdr->len = htons(hdr->len);
+
+  write(fd, buf, sizeof(dbproto_hdr_t) + sizeof(dbproto_employee_add_req));
+
+  read(fd, buf, sizeof(buf));
+
+  hdr->type = ntohl(hdr->type);
+  hdr->len = ntohs(hdr->len);
+
+  if (hdr->type == MSG_ERROR) {
+    printf("Improper format for add employee string.\n");
+    close(fd);
+    return STATUS_ERROR;
+  }
+
+  if (hdr->type == MSG_EMPLOYEE_ADD_RESP) {
+    printf("Employee succesfully added.\n");
+  }
+
+  return STATUS_SUCCESS;
 }
 
 void handle_client_fsm(dbheader_t *dbhdr, employee_t **employees,
@@ -59,10 +108,10 @@ void handle_client_fsm(dbheader_t *dbhdr, employee_t **employees,
       printf("Adding employee: %s\n", employee->data);
       if (add_employee(dbhdr, employees, (char *)employee->data) !=
           STATUS_SUCCESS) {
-        // fsm_reply_add_err(client, hdr);
+        fsm_reply_add_err(client, hdr);
         return;
       } else {
-        // fsm_reply_add(client, hdr);
+        fsm_reply_add(client, hdr);
         output_file(dbfd, dbhdr, *employees);
       }
     }
