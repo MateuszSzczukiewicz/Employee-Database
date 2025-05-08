@@ -2,7 +2,7 @@
 #define SRVPOLL_H
 
 #include "parse.h"
-#include <poll.h>
+#include <stddef.h>
 
 #define MAX_CLIENTS 256
 #define PORT 8080
@@ -10,17 +10,17 @@
 
 typedef enum {
   STATE_NEW,
-  STATE_CONNECTED,
-  STATE_DISCONNECTED,
   STATE_HELLO,
   STATE_MSG,
-  STATE_GOODBEY
+  STATE_CLOSING,
+  STATE_DISCONNECTED,
 } state_e;
 
 typedef struct {
   int fd;
   state_e state;
-  char buffer[4096];
+  unsigned char buffer[BUFF_SIZE];
+  size_t bytes_received;
 } clientstate_t;
 
 void handle_client_fsm(dbheader_t *dbhdr, employee_t **employees,
@@ -28,8 +28,8 @@ void handle_client_fsm(dbheader_t *dbhdr, employee_t **employees,
 
 void init_clients(clientstate_t *states);
 
-int find_free_slot(clientstate_t *states);
+int find_free_slot(const clientstate_t *states);
 
-int find_slot_by_fd(clientstate_t *states, int fd);
+int find_slot_by_fd(const clientstate_t *states, int fd);
 
 #endif
